@@ -2,7 +2,7 @@
 **k8switch** is a very small bash script that uses [fzf](https://github.com/junegunn/fzf) underhood to switch between kubernetes namespaces and contexts fastly.
 
 ## Demo
-![Demo](.github/kns-demo.gif)
+coming soon
 
 ## Installation
 Execute the below command to install k8switch:
