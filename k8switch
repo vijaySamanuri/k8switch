@@ -1,0 +1,80 @@
+#!/bin/bash
+
+set -e
+
+command_exists() {
+        command -v "$@" > /dev/null 2>&1
+}
+
+if ! command_exists kubectl; then
+        echo "kubectl not found. Exiting !" >&@
+        exit 1
+fi
+
+if ! command_exists fzf; then
+	echo -e "fzf not found. Please install fzf (https://github.com/junegunn/fzf)" >&2
+	echo "                                     OR " >&2
+	echo -e  "Execute the below convenience command to install \"fzf\" in ubuntu \n wget http://launchpadlibrarian.net/432366410/fzf_0.18.0-2_amd64.deb -O /tmp/fzf_0.18.0-2_amd64.deb  && sudo dpkg -i /tmp/fzf_0.18.0-2_amd64.deb" >&2
+	exit 1
+fi
+
+current_context="$(kubectl config current-context)"
+
+switch_namespace() {
+
+	namespace="$(kubectl config view -o jsonpath="{.contexts[?(@.name == '${current_context}')].context.namespace}")"
+	if [ -z "$namespace" ]; then
+		namespace="default"
+	fi
+
+	selected_namespace=$( (kubectl get namespaces -o=jsonpath="{.items[?(@.metadata.name!='$namespace')].metadata.name}" | xargs -n 1; echo $namespace ) | fzf -0 -1 --tac -q "${1:-""}" --prompt "$current_context> ")
+
+	if [ ! -z "$selected_namespace" ]; then
+		kubectl config set-context "$current_context" "--namespace=$selected_namespace" >/dev/null
+		echo "Set context namespace to \"$selected_namespace\""
+	fi
+}
+
+switch_context() {
+	if readlink "$0" >/dev/null; then
+		source="$(readlink "$0")"
+		dir=$(cd "$(dirname "$0")/$(dirname "$source")" && pwd)
+		prefix="$dir/.."
+	else
+		prefix="$(dirname "$0")/.."
+	fi
+
+	selected_context=$( (kubectl config view -o jsonpath="{.contexts[?(@.name != '${current_context}')].name}" | xargs -n 1; echo "${current_context}" ) \
+            | fzf -0 -1 --tac -q "${1:-""}" --prompt "$current_context> ")
+	if [ ! -z "$selected_context" ]; then
+		kubectl config use-context "${selected_context}"
+	fi
+
+}
+
+usage() {
+	echo 
+	echo "Usage: $0 [k8sGroupType] "  
+	echo
+	echo
+	echo "K8s Group Types to Switch"
+	echo 
+	echo "namespace|ns    Switch namespace"
+	echo "context|ctx     Switch Kubernetes Context"
+	echo ""
+	echo ""
+}
+
+switch_k8s_type="$1"
+
+if [ -z "$switch_k8s_type" ]; then
+	usage
+	exit 1
+fi
+
+case "$switch_k8s_type" in
+        namespace|ns) switch_namespace ; exit 0;;
+        context|ctx) switch_context ; exit 0;;
+	--help|-h) usage ; exit 0 ;;
+        *) echo "Unknown k8s type $switch_k8s_type !!"; usage ; exit 1 ;;
+esac
